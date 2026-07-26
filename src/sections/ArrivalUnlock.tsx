@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { gsap } from "gsap";
 import { Fingerprint, Sparkles } from "lucide-react";
 import {
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
   useCallback,
@@ -14,6 +15,7 @@ import {
 import { playChime, playPulse } from "@/src/lib/audio";
 
 type ArrivalUnlockProps = {
+  blackoutMs: number;
   holdDurationMs: number;
   instruction: string;
   shortTapHint: string;
@@ -21,6 +23,7 @@ type ArrivalUnlockProps = {
 };
 
 export function ArrivalUnlock({
+  blackoutMs,
   holdDurationMs,
   instruction,
   shortTapHint,
@@ -144,6 +147,11 @@ export function ArrivalUnlock({
       animate={unlocked ? { opacity: 0 } : { opacity: 1 }}
       transition={{ duration: reduceMotion ? 0.2 : 1.25, ease: [0.22, 1, 0.36, 1] }}
       aria-hidden={unlocked}
+      style={
+        {
+          "--arrival-delay": `${blackoutMs}ms`,
+        } as CSSProperties
+      }
     >
       <div ref={quietRef} className="arrival__quiet" aria-hidden="true" />
       <div className="arrival__copy">
@@ -151,7 +159,7 @@ export function ArrivalUnlock({
           className="arrival__kicker"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 0.72, y: 0 }}
-          transition={{ delay: 1.45, duration: 1.2 }}
+          transition={{ delay: (blackoutMs + 450) / 1000, duration: 1.2 }}
         >
           A little something is waiting
         </motion.span>
@@ -174,7 +182,9 @@ export function ArrivalUnlock({
         </AnimatePresence>
 
         <button
-          className={`fingerprint ${holding ? "is-holding" : ""}`}
+          className={`fingerprint ${holding ? "is-holding" : ""} ${
+            showHint ? "is-short-tap" : ""
+          }`}
           type="button"
           aria-label={instruction}
           onPointerDown={handlePointerDown}
@@ -195,7 +205,7 @@ export function ArrivalUnlock({
         <motion.p
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 0.74, y: 0 }}
-          transition={{ delay: 1.7, duration: 1 }}
+          transition={{ delay: (blackoutMs + 700) / 1000, duration: 1 }}
         >
           {instruction}
         </motion.p>

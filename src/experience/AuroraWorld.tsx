@@ -15,9 +15,18 @@ import * as THREE from "three";
 import styles from "./AuroraWorld.module.css";
 import { SceneFallback } from "./SceneFallback";
 
+export interface AuroraNarrativeState {
+  birthdayRevealed: boolean;
+  cakeComplete: boolean;
+  letterOpened: boolean;
+  moonTouched: boolean;
+  storyProgress: number;
+  treeProgress: number;
+}
+
 export interface AuroraWorldProps {
-  celebration: boolean;
   moonLabel?: string;
+  narrative: AuroraNarrativeState;
   onMoonInteract?: () => void;
   palette: {
     readonly auroraBlue: string;
@@ -54,6 +63,7 @@ interface WorldSceneProps extends AuroraWorldProps {
 }
 
 interface AuroraRibbonProps {
+  cakeComplete: boolean;
   celebration: boolean;
   colorA: string;
   colorB: string;
@@ -61,6 +71,7 @@ interface AuroraRibbonProps {
   phase: number;
   position: [number, number, number];
   progress: number;
+  narrativeWarmth: number;
   reducedMotion: boolean;
   rotation: number;
   scale: [number, number, number];
@@ -81,12 +92,16 @@ interface ParticleFieldProps {
 }
 
 interface MoonProps {
+  cakeComplete: boolean;
   celebration: boolean;
+  moonTouched: boolean;
+  narrativeGlow: number;
   palette: AuroraWorldProps["palette"];
   progress: number;
   pulseToken: number;
   quality: QualityTier;
   reducedMotion: boolean;
+  treeProgress: number;
   unlocked: boolean;
 }
 
@@ -397,9 +412,11 @@ function CameraRig({
 }
 
 function AuroraRibbon({
+  cakeComplete,
   celebration,
   colorA,
   colorB,
+  narrativeWarmth,
   opacity,
   phase,
   position,
@@ -430,13 +447,22 @@ function AuroraRibbon({
 
     const safeDelta = Math.min(delta, 0.05);
     if (!reducedMotion) {
-      shader.uniforms.uTime.value += safeDelta;
+      shader.uniforms.uTime.value += safeDelta * (cakeComplete ? 1.55 : 1);
     }
 
     const targetOpacity =
       opacity *
-      (0.22 + (unlocked ? 0.48 : 0) + progress * 0.19 + (celebration ? 0.16 : 0));
-    const targetWarmth = progress * 0.42 + (celebration ? 0.22 : 0);
+      (0.22 +
+        (unlocked ? 0.48 : 0) +
+        progress * 0.14 +
+        (celebration ? 0.12 : 0) +
+        narrativeWarmth * 0.1 +
+        (cakeComplete ? 0.18 : 0));
+    const targetWarmth =
+      progress * 0.22 +
+      (celebration ? 0.14 : 0) +
+      narrativeWarmth +
+      (cakeComplete ? 0.22 : 0);
 
     if (reducedMotion) {
       shader.uniforms.uOpacity.value = targetOpacity;
@@ -548,12 +574,16 @@ function ParticleField({
 }
 
 function Moon({
+  cakeComplete,
   celebration,
+  moonTouched,
+  narrativeGlow,
   palette,
   progress,
   pulseToken,
   quality,
   reducedMotion,
+  treeProgress,
   unlocked,
 }: MoonProps) {
   const group = useRef<THREE.Group>(null);
@@ -600,15 +630,37 @@ function Moon({
         ? Math.sin((pulseAge.current / 1.8) * Math.PI) * (reducedMotion ? 0.04 : 0.11)
         : 0;
     const drift = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 0.22) * 0.04;
-    const moonScale = 0.72 + progress * 0.035 + (celebration ? 0.045 : 0) + pulse;
+    const moonScale =
+      0.72 +
+      progress * 0.025 +
+      (celebration ? 0.035 : 0) +
+      treeProgress * 0.025 +
+      (moonTouched ? 0.025 : 0) +
+      (cakeComplete ? 0.065 : 0) +
+      pulse;
     const targetX = viewport.width * 0.33;
     const targetY = viewport.height * 0.31 + drift;
+    const persistentGlow =
+      narrativeGlow * 0.055 +
+      treeProgress * 0.035 +
+      (moonTouched ? 0.045 : 0) +
+      (cakeComplete ? 0.07 : 0);
+    const persistentDust =
+      treeProgress * 0.13 +
+      (moonTouched ? 0.08 : 0) +
+      (cakeComplete ? 0.18 : 0);
 
     if (reducedMotion) {
       group.current.position.set(targetX, targetY, -2.8);
       group.current.scale.setScalar(moonScale);
-      glow.current.opacity = 0.075 + (unlocked ? 0.045 : 0) + progress * 0.035 + pulse * 0.5;
-      moonDust.current.opacity = pulseAge.current < 2.2 ? 0.42 : 0;
+      glow.current.opacity =
+        0.075 +
+        (unlocked ? 0.045 : 0) +
+        progress * 0.025 +
+        persistentGlow +
+        pulse * 0.5;
+      moonDust.current.opacity =
+        pulseAge.current < 2.2 ? Math.max(0.42, persistentDust) : persistentDust;
       return;
     }
 
@@ -617,26 +669,51 @@ function Moon({
     group.current.scale.setScalar(
       THREE.MathUtils.damp(group.current.scale.x, moonScale, 4, safeDelta),
     );
-    glow.current.opacity = 0.075 + (unlocked ? 0.045 : 0) + progress * 0.035 + pulse * 0.5;
+    glow.current.opacity =
+      0.075 +
+      (unlocked ? 0.045 : 0) +
+      progress * 0.025 +
+      persistentGlow +
+      pulse * 0.5;
     moonDust.current.opacity =
       pulseAge.current < 2.2
-        ? Math.max(0, Math.sin((pulseAge.current / 2.2) * Math.PI)) * 0.68
-        : 0;
+        ? Math.max(
+            persistentDust,
+            Math.max(0, Math.sin((pulseAge.current / 2.2) * Math.PI)) * 0.68,
+          )
+        : persistentDust;
   });
 
   return (
     <group ref={group} position={[2, 2, -2.8]} scale={0.72}>
       <pointLight
-        color={celebration ? palette.auroraPink : palette.lavender}
+        color={cakeComplete ? palette.softWhite : celebration ? palette.auroraPink : palette.lavender}
         distance={8}
-        intensity={(unlocked ? 1.15 : 0.52) + progress * 0.45}
+        intensity={
+          (unlocked ? 1.15 : 0.52) +
+          progress * 0.32 +
+          narrativeGlow * 0.22 +
+          treeProgress * 0.28 +
+          (cakeComplete ? 0.62 : 0)
+        }
       />
       <mesh>
         <sphereGeometry args={[0.72, quality === "low" ? 20 : 28, quality === "low" ? 12 : 18]} />
         <meshStandardMaterial
           color={palette.softWhite}
-          emissive={celebration ? palette.auroraPink : palette.royalViolet}
-          emissiveIntensity={(unlocked ? 0.52 : 0.3) + progress * 0.18}
+          emissive={
+            cakeComplete
+              ? palette.auroraPink
+              : celebration
+                ? palette.lavender
+                : palette.royalViolet
+          }
+          emissiveIntensity={
+            (unlocked ? 0.52 : 0.3) +
+            progress * 0.12 +
+            narrativeGlow * 0.16 +
+            (cakeComplete ? 0.28 : 0)
+          }
           roughness={0.78}
         />
       </mesh>
@@ -645,7 +722,7 @@ function Moon({
         <meshBasicMaterial
           ref={glow}
           blending={THREE.AdditiveBlending}
-          color={celebration ? palette.auroraPink : palette.lavender}
+          color={cakeComplete ? palette.softWhite : celebration ? palette.auroraPink : palette.lavender}
           depthWrite={false}
           opacity={0.08}
           side={THREE.BackSide}
@@ -672,8 +749,8 @@ function Moon({
 
 function WorldScene({
   active,
-  celebration,
   moonPulse,
+  narrative,
   onPerformanceDrop,
   progress,
   palette,
@@ -685,15 +762,54 @@ function WorldScene({
   const starCount = quality === "high" ? 310 : quality === "medium" ? 205 : 118;
   const dustCount = quality === "high" ? 112 : quality === "medium" ? 72 : 42;
   const normalizedProgress = clamp01(progress);
-  const starOpacity = 0.2 + (unlocked ? 0.36 : 0) + normalizedProgress * 0.16;
-  const dustOpacity = 0.12 + (unlocked ? 0.13 : 0) + (celebration ? 0.13 : 0);
+  const celebration = narrative.birthdayRevealed;
+  const cakeComplete = narrative.cakeComplete;
+  const storyProgress = clamp01(narrative.storyProgress);
+  const treeProgress = clamp01(narrative.treeProgress);
+  const narrativeWarmth = clamp01(
+    storyProgress * 0.16 +
+      (narrative.letterOpened ? 0.14 : 0) +
+      treeProgress * 0.18 +
+      (narrative.moonTouched ? 0.09 : 0),
+  );
+  const starOpacity =
+    0.2 +
+    (unlocked ? 0.36 : 0) +
+    normalizedProgress * 0.12 +
+    treeProgress * 0.12 +
+    (cakeComplete ? 0.08 : 0);
+  const dustOpacity =
+    0.12 +
+    (unlocked ? 0.13 : 0) +
+    (celebration ? 0.1 : 0) +
+    storyProgress * 0.07 +
+    (narrative.letterOpened ? 0.07 : 0) +
+    treeProgress * 0.08 +
+    (cakeComplete ? 0.16 : 0);
 
   return (
     <>
       <color attach="background" args={[palette.midnightBlack]} />
       <fog attach="fog" args={[palette.midnightBlack, 8, 24]} />
-      <ambientLight color={palette.deepPurple} intensity={0.22 + normalizedProgress * 0.08} />
-      <directionalLight color={palette.lavender} intensity={0.26} position={[-4, 5, 4]} />
+      <ambientLight
+        color={palette.deepPurple}
+        intensity={
+          0.22 +
+          normalizedProgress * 0.05 +
+          storyProgress * 0.08 +
+          (cakeComplete ? 0.12 : 0)
+        }
+      />
+      <directionalLight
+        color={narrative.letterOpened ? palette.auroraPink : palette.lavender}
+        intensity={
+          0.26 +
+          (narrative.letterOpened ? 0.08 : 0) +
+          treeProgress * 0.08 +
+          (cakeComplete ? 0.14 : 0)
+        }
+        position={[-4, 5, 4]}
+      />
 
       <ParticleField
         color={palette.softWhite}
@@ -708,8 +824,20 @@ function WorldScene({
         width={18}
       />
       <ParticleField
-        color={celebration ? palette.auroraPink : palette.lavender}
-        count={Math.round(dustCount * (celebration ? 1.2 : 1))}
+        color={
+          cakeComplete
+            ? palette.softWhite
+            : celebration
+              ? palette.auroraPink
+              : palette.lavender
+        }
+        count={Math.round(
+          dustCount *
+            (1 +
+              (celebration ? 0.16 : 0) +
+              treeProgress * 0.18 +
+              (cakeComplete ? 0.36 : 0)),
+        )}
         depth={9}
         height={10}
         opacity={dustOpacity}
@@ -719,13 +847,29 @@ function WorldScene({
         speed={0.72}
         width={13}
       />
+      {cakeComplete ? (
+        <ParticleField
+          color={palette.auroraPink}
+          count={quality === "high" ? 96 : quality === "medium" ? 64 : 38}
+          depth={7}
+          height={12}
+          opacity={0.48}
+          reducedMotion={reducedMotion}
+          seed={270726}
+          size={quality === "low" ? 0.042 : 0.034}
+          speed={1.24}
+          width={12}
+        />
+      ) : null}
 
       <group position={[0, -0.55, -3.8]}>
         <AuroraRibbon
+          cakeComplete={cakeComplete}
           celebration={celebration}
           colorA={palette.auroraBlue}
           colorB={palette.royalViolet}
           opacity={0.74}
+          narrativeWarmth={narrativeWarmth}
           phase={0.7}
           position={[-0.25, 0.2, -0.5]}
           progress={normalizedProgress}
@@ -735,10 +879,12 @@ function WorldScene({
           unlocked={unlocked}
         />
         <AuroraRibbon
+          cakeComplete={cakeComplete}
           celebration={celebration}
           colorA={palette.deepPurple}
           colorB={palette.auroraPink}
           opacity={0.64}
+          narrativeWarmth={narrativeWarmth}
           phase={2.6}
           position={[0.45, -0.55, -0.9]}
           progress={normalizedProgress}
@@ -749,10 +895,12 @@ function WorldScene({
         />
         {quality !== "low" ? (
           <AuroraRibbon
+            cakeComplete={cakeComplete}
             celebration={celebration}
             colorA={palette.auroraBlue}
             colorB={palette.lavender}
             opacity={0.46}
+            narrativeWarmth={narrativeWarmth}
             phase={4.4}
             position={[-0.55, 0.82, -1.3]}
             progress={normalizedProgress}
@@ -765,12 +913,16 @@ function WorldScene({
       </group>
 
       <Moon
+        cakeComplete={cakeComplete}
         celebration={celebration}
+        moonTouched={narrative.moonTouched}
+        narrativeGlow={narrativeWarmth}
         palette={palette}
         progress={normalizedProgress}
         pulseToken={moonPulse}
         quality={quality}
         reducedMotion={reducedMotion}
+        treeProgress={treeProgress}
         unlocked={unlocked}
       />
       <CameraRig
@@ -789,8 +941,8 @@ function WorldScene({
 }
 
 export function AuroraWorld({
-  celebration,
   moonLabel = "Touch the moon",
+  narrative,
   onMoonInteract,
   palette,
   progress,
@@ -803,6 +955,14 @@ export function AuroraWorld({
   const reducedMotion = useReducedMotion();
   const pageVisible = usePageVisibility();
   const normalizedProgress = clamp01(progress);
+  const fallbackProgress = clamp01(
+    normalizedProgress +
+      narrative.storyProgress * 0.04 +
+      narrative.treeProgress * 0.06 +
+      (narrative.letterOpened ? 0.04 : 0) +
+      (narrative.moonTouched ? 0.03 : 0) +
+      (narrative.cakeComplete ? 0.16 : 0),
+  );
 
   useEffect(() => {
     const initializationFrame = window.requestAnimationFrame(() => {
@@ -823,8 +983,8 @@ export function AuroraWorld({
   }, [onMoonInteract]);
   const fallback = (
     <SceneFallback
-      celebration={celebration}
-      progress={normalizedProgress}
+      celebration={narrative.birthdayRevealed || narrative.cakeComplete}
+      progress={fallbackProgress}
       reducedMotion={reducedMotion}
       unlocked={unlocked}
     />
@@ -832,7 +992,19 @@ export function AuroraWorld({
 
   return (
     <>
-      <div className={styles.world} data-quality={effectiveQuality}>
+      <div
+        className={styles.world}
+        data-quality={effectiveQuality}
+        data-world-stage={
+          narrative.cakeComplete
+            ? "cake-celebration"
+            : narrative.birthdayRevealed
+              ? "birthday-reveal"
+              : unlocked
+                ? "journey"
+                : "arrival"
+        }
+      >
         {webGLAvailable ? (
           <WebGLBoundary fallback={fallback}>
             <Canvas
@@ -858,8 +1030,8 @@ export function AuroraWorld({
             >
               <WorldScene
                 active={pageVisible}
-                celebration={celebration}
                 moonPulse={moonPulse}
+                narrative={narrative}
                 onPerformanceDrop={handlePerformanceDrop}
                 palette={palette}
                 progress={normalizedProgress}

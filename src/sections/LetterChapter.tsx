@@ -82,7 +82,7 @@ export function LetterChapter({ letter, onOpen }: LetterChapterProps) {
               delay: reduceMotion ? 0 : 0.18,
             }}
           >
-            <span className="letter-paper__overline">27 · 07</span>
+            <span className="letter-paper__overline">{letter.dateStamp}</span>
             <h3>{letter.title}</h3>
             <p className="letter-paper__salutation">{letter.salutation}</p>
             {letter.paragraphs.map((paragraph) => (

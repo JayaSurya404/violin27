@@ -275,10 +275,22 @@ main {
   inset: 0;
   min-height: 100svh;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 85%, rgba(104, 45, 170, 0.14), transparent 34%),
-    #020104;
+  background: #020104;
   touch-action: none;
+}
+
+.arrival::before {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 85%,
+    rgba(104, 45, 170, 0.14),
+    transparent 34%
+  );
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  animation: arrival-glow 2.2s var(--arrival-delay) forwards ease-out;
 }
 
 .arrival__quiet {
@@ -291,7 +303,7 @@ main {
     radial-gradient(circle at 66% 16%, rgba(255, 255, 255, 0.44) 0 0.8px, transparent 1.3px),
     radial-gradient(circle at 34% 46%, rgba(255, 255, 255, 0.4) 0 0.8px, transparent 1.4px);
   background-size: 214px 194px, 287px 241px, 168px 219px, 316px 276px;
-  animation: arrival-stars 2.8s 0.95s forwards ease-out;
+  animation: arrival-stars 2.8s var(--arrival-delay) forwards ease-out;
 }
 
 .arrival__copy {
@@ -352,8 +364,11 @@ main {
   place-items: center;
   background: transparent;
   cursor: pointer;
+  opacity: 0;
   user-select: none;
   -webkit-touch-callout: none;
+  animation: fingerprint-arrive 0.9s
+    calc(var(--arrival-delay) + 120ms) forwards ease-out;
 }
 
 .fingerprint__ring {
@@ -412,6 +427,16 @@ main {
 
 .fingerprint.is-holding .fingerprint__particles {
   animation: fingerprint-particles 1.15s infinite ease-out;
+}
+
+.fingerprint.is-short-tap::after {
+  position: absolute;
+  inset: -8px;
+  border: 1px solid rgba(206, 177, 255, 0.48);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+  animation: short-tap-ripple 0.7s ease-out both;
 }
 
 .arrival__light-spread {
@@ -986,8 +1011,9 @@ main {
   display: block;
   margin-top: 30px;
   color: #65456e;
-  font-family: var(--hand);
-  font-size: 2.1rem;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-style: italic;
 }
 
 /* Cake */
@@ -1740,8 +1766,9 @@ main {
 
 .music-dock__volume input {
   width: 62px;
-  height: 18px;
+  height: 44px;
   accent-color: #b78df3;
+  touch-action: manipulation;
 }
 
 .modal-layer {
@@ -1833,15 +1860,30 @@ main {
   to { opacity: 0.68; transform: scale(1); }
 }
 
+@keyframes arrival-glow {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes fingerprint-breathe {
   0%, 100% { transform: scale(0.97); opacity: 0.72; }
   50% { transform: scale(1.035); opacity: 1; }
+}
+
+@keyframes fingerprint-arrive {
+  from { opacity: 0; transform: translateY(8px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes fingerprint-particles {
   0% { opacity: 0; transform: scale(0.7) rotate(0); }
   35% { opacity: 1; }
   100% { opacity: 0; transform: scale(1.5) rotate(18deg); }
+}
+
+@keyframes short-tap-ripple {
+  from { opacity: 0.75; transform: scale(0.82); }
+  to { opacity: 0; transform: scale(1.32); }
 }
 
 @keyframes cursor-blink {
@@ -1981,7 +2023,7 @@ main {
   }
 
   .music-dock__label {
-    min-width: 38px;
+    min-width: 44px;
     padding: 0 8px;
   }
 
@@ -2025,10 +2067,6 @@ main {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-
-  .arrival__quiet {
-    opacity: 0.58;
   }
 
   .typewriter__cursor {

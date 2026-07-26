@@ -112,6 +112,7 @@ export interface StoryConfig {
 
 export interface LetterConfig {
   readonly title: string;
+  readonly dateStamp: string;
   readonly salutation: string;
   readonly paragraphs: readonly string[];
   readonly closing: string;

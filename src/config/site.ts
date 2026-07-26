@@ -142,6 +142,7 @@ export const siteConfig = {
   },
   letter: {
     title: "A Letter for Your Birthday",
+    dateStamp: "27 · 07",
     salutation: `Dear ${recipientName},`,
     paragraphs: [
       "A birthday is a lovely reason to pause and celebrate the person someone is, the kindness they have shared, and all the possibility waiting in the year ahead.",
@@ -185,7 +186,8 @@ export const siteConfig = {
     title: "The Wish Tree",
     introduction:
       "These small wishes have been waiting for a branch of their own.",
-    instruction: "Drag each wish to the tree and watch it come alive.",
+    instruction:
+      "Drag each wish to the tree, or tap a wish and then the tree, and watch it come alive.",
     placedLabel: "Wish placed",
     completeTitle: "The tree is glowing",
     completeMessage:

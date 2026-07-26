@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Mic, RotateCcw, Sparkles, Wind } from "lucide-react";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SectionHeading } from "@/src/components/SectionHeading";
 import { useBlowDetection } from "@/src/hooks/useBlowDetection";
 import { playCelebration } from "@/src/lib/audio";
@@ -21,6 +21,8 @@ export function CakeCeremony({
 }: CakeCeremonyProps) {
   const reduceMotion = useReducedMotion();
   const didCompleteRef = useRef(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isInViewport, setIsInViewport] = useState(false);
 
   const handleCandleOut = useCallback(() => {
     navigator.vibrate?.(10);
@@ -35,21 +37,38 @@ export function CakeCeremony({
   }, [onComplete]);
 
   const {
+    dismissMicrophoneNotice,
     status,
     intensity,
+    pauseMicrophone,
     remaining,
     requestMicrophone,
   } = useBlowDetection({
+    active: isInViewport,
     candleCount: CANDLE_COUNT,
     onCandleOut: handleCandleOut,
     onComplete: handleComplete,
   });
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) pauseMicrophone();
+      setIsInViewport(entry.isIntersecting);
+    });
+
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [pauseMicrophone]);
 
   const complete = status === "complete";
   const needsExplanation = status === "denied" || status === "unavailable";
 
   return (
     <section
+      ref={sectionRef}
       className={`chapter cake-chapter ${complete ? "is-complete" : ""}`}
     >
       <div className="chapter-shell chapter-shell--narrow">
@@ -171,14 +190,30 @@ export function CakeCeremony({
                   : content.unavailableText}
               </p>
             </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void requestMicrophone()}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                gridColumn: 2,
+              }}
             >
-              <RotateCcw size={15} aria-hidden="true" />
-              {content.retryLabel}
-            </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void requestMicrophone()}
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                {content.retryLabel}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={dismissMicrophoneNotice}
+              >
+                {content.dismissLabel}
+              </button>
+            </div>
           </motion.div>
         ) : null}
       </AnimatePresence>

@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { siteConfig } from "@/src/config/site";
+import type { AuroraNarrativeState } from "@/src/experience/AuroraWorld";
 import { useLenis } from "@/src/hooks/useLenis";
 import { playChime } from "@/src/lib/audio";
 import { MoonBlessing } from "@/src/components/MoonBlessing";
@@ -38,6 +39,14 @@ const AuroraWorld = dynamic(
 
 const PROGRESS_STORAGE_KEY = "purple-aurora:completed-moments";
 
+const isGenuineVisitorInteraction = (id: string) =>
+  id === "gift-unlocked" ||
+  id === "letter-opened" ||
+  id === "cake-complete" ||
+  id === "moon-touched" ||
+  id.startsWith("wish-star:") ||
+  id.startsWith("tree-wish:");
+
 type ThemeStyle = CSSProperties & {
   "--midnight": string;
   "--deep-purple": string;
@@ -58,6 +67,7 @@ export function BirthdayExperience() {
   const [birthdayRevealed, setBirthdayRevealed] = useState(false);
   const [cakeComplete, setCakeComplete] = useState(false);
   const [journeyProgress, setJourneyProgress] = useState(0);
+  const [storyProgress, setStoryProgress] = useState(0);
   const [explorations, setExplorations] = useState<Set<string>>(
     () => new Set(),
   );
@@ -105,11 +115,17 @@ export function BirthdayExperience() {
     window.setTimeout(() => mainRef.current?.focus(), 80);
   }, [trackExploration]);
 
+  const genuineInteractionCount = useMemo(
+    () =>
+      Array.from(explorations).filter(isGenuineVisitorInteraction).length,
+    [explorations],
+  );
+
   const handleMoonInteract = useCallback(() => {
     playChime();
     navigator.vibrate?.(12);
     const isNewInteraction = !explorations.has("moon-touched");
-    const nextCount = explorations.size + (isNewInteraction ? 1 : 0);
+    const nextCount = genuineInteractionCount + (isNewInteraction ? 1 : 0);
     trackExploration("moon-touched");
 
     if (nextCount >= siteConfig.experience.moonUnlockInteractions) {
@@ -125,7 +141,7 @@ export function BirthdayExperience() {
     setMoonNote(siteConfig.moon.touchMessages[messageIndex]);
     window.clearTimeout(moonNoteTimerRef.current);
     moonNoteTimerRef.current = window.setTimeout(() => setMoonNote(""), 2600);
-  }, [explorations, trackExploration]);
+  }, [explorations, genuineInteractionCount, trackExploration]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -159,6 +175,28 @@ export function BirthdayExperience() {
           ? Math.min(1, Math.max(0, window.scrollY / documentHeight))
           : 0,
       );
+
+      const storyChapter =
+        document.querySelector<HTMLElement>(".story-chapter");
+      if (storyChapter) {
+        const storyBounds = storyChapter.getBoundingClientRect();
+        const storyTravel = window.innerHeight + storyBounds.height;
+        const nextStoryProgress =
+          storyTravel > 0
+            ? Math.min(
+                1,
+                Math.max(
+                  0,
+                  (window.innerHeight - storyBounds.top) / storyTravel,
+                ),
+              )
+            : 0;
+        setStoryProgress((current) =>
+          Math.abs(current - nextStoryProgress) < 0.005
+            ? current
+            : nextStoryProgress,
+        );
+      }
     };
     const handleScroll = () => {
       if (!frameId) frameId = window.requestAnimationFrame(updateProgress);
@@ -197,8 +235,30 @@ export function BirthdayExperience() {
   );
 
   const moonReady =
-    explorations.size >= siteConfig.experience.moonUnlockInteractions;
-  const celebration = birthdayRevealed || cakeComplete;
+    genuineInteractionCount >= siteConfig.experience.moonUnlockInteractions;
+  const treeWishCount = Array.from(explorations).filter((id) =>
+    id.startsWith("tree-wish:"),
+  ).length;
+  const worldState = useMemo<AuroraNarrativeState>(
+    () => ({
+      birthdayRevealed,
+      cakeComplete,
+      letterOpened: explorations.has("letter-opened"),
+      moonTouched: explorations.has("moon-touched"),
+      storyProgress,
+      treeProgress: Math.min(
+        1,
+        treeWishCount / Math.max(1, siteConfig.treeWishes.length),
+      ),
+    }),
+    [
+      birthdayRevealed,
+      cakeComplete,
+      explorations,
+      storyProgress,
+      treeWishCount,
+    ],
+  );
   const storyBeats = siteConfig.story.paragraphs.map((text, index) => ({
     id: `story-${index + 1}`,
     text,
@@ -215,18 +275,21 @@ export function BirthdayExperience() {
         </a>
       ) : null}
 
-      <AuroraWorld
-        celebration={celebration}
-        moonLabel={siteConfig.moon.accessibleLabel}
-        onMoonInteract={handleMoonInteract}
-        palette={siteConfig.theme.colors}
-        progress={journeyProgress}
-        unlocked={unlocked}
-      />
+      {unlocked ? (
+        <AuroraWorld
+          moonLabel={siteConfig.moon.accessibleLabel}
+          narrative={worldState}
+          onMoonInteract={handleMoonInteract}
+          palette={siteConfig.theme.colors}
+          progress={journeyProgress}
+          unlocked
+        />
+      ) : null}
       <div className="experience__veil" aria-hidden="true" />
 
       {!unlocked ? (
         <ArrivalUnlock
+          blackoutMs={siteConfig.experience.initialBlackoutMs}
           holdDurationMs={siteConfig.experience.holdDurationMs}
           instruction={siteConfig.arrival.instruction}
           shortTapHint={siteConfig.arrival.shortTapHint}
@@ -247,7 +310,6 @@ export function BirthdayExperience() {
           reveal={siteConfig.birthdayReveal}
           onReveal={() => {
             setBirthdayRevealed(true);
-            trackExploration("birthday-reveal");
           }}
         />
         <WishSky

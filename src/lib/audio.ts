@@ -62,9 +62,15 @@ export async function playTone({
   oscillator.stop(startTime + duration + 0.08);
 }
 
+function safelyPlayTone(options: ToneOptions) {
+  void playTone(options).catch(() => {
+    // Sound is optional; gesture and browser policies may reject playback.
+  });
+}
+
 export function playChime() {
-  void playTone({ frequency: 523.25, duration: 1.15, gain: 0.028 });
-  void playTone({
+  safelyPlayTone({ frequency: 523.25, duration: 1.15, gain: 0.028 });
+  safelyPlayTone({
     frequency: 783.99,
     duration: 1.3,
     gain: 0.018,
@@ -73,7 +79,7 @@ export function playChime() {
 }
 
 export function playPulse() {
-  void playTone({
+  safelyPlayTone({
     frequency: 196,
     duration: 0.28,
     gain: 0.02,
@@ -82,13 +88,13 @@ export function playPulse() {
 }
 
 export function playPaper() {
-  void playTone({
+  safelyPlayTone({
     frequency: 286,
     duration: 0.32,
     gain: 0.012,
     type: "triangle",
   });
-  void playTone({
+  safelyPlayTone({
     frequency: 362,
     duration: 0.45,
     gain: 0.009,
@@ -99,7 +105,7 @@ export function playPaper() {
 
 export function playCelebration() {
   [392, 523.25, 659.25, 783.99].forEach((frequency, index) => {
-    void playTone({
+    safelyPlayTone({
       frequency,
       duration: 1.35,
       gain: 0.018,
@@ -107,4 +113,3 @@ export function playCelebration() {
     });
   });
 }
-

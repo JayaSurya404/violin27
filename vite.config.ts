@@ -44,6 +44,11 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    build: {
+      // Three.js stays in a deferred post-unlock chunk; keep the warning
+      // threshold aligned with that intentional lazy boundary.
+      chunkSizeWarningLimit: 900,
+    },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,

@@ -1,8 +1,8 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, type PanInfo, useReducedMotion } from "framer-motion";
 import { Flower2, Grip, Sparkle } from "lucide-react";
-import { type DragEvent, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { SectionHeading } from "@/src/components/SectionHeading";
 import type { TreeWish, WishTreeCopy } from "@/src/types/site";
 import { playChime } from "@/src/lib/audio";
@@ -18,6 +18,7 @@ export function WishTree({ copy, wishes, onPlace }: WishTreeProps) {
   const [placed, setPlaced] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
+  const treeRef = useRef<HTMLButtonElement>(null);
 
   const growth = placed.size / Math.max(1, wishes.length);
   const availableWishes = useMemo(
@@ -35,9 +36,33 @@ export function WishTree({ copy, wishes, onPlace }: WishTreeProps) {
     onPlace(id);
   };
 
-  const dropWish = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    placeWish(event.dataTransfer.getData("text/plain") || dragged);
+  const finishDrag = (id: string, info: PanInfo) => {
+    const bounds = treeRef.current?.getBoundingClientRect();
+    if (!bounds) {
+      setDragged(null);
+      return;
+    }
+
+    const points = [
+      info.point,
+      {
+        x: info.point.x - window.scrollX,
+        y: info.point.y - window.scrollY,
+      },
+    ];
+    const droppedOnTree = points.some(
+      ({ x, y }) =>
+        x >= bounds.left &&
+        x <= bounds.right &&
+        y >= bounds.top &&
+        y <= bounds.bottom,
+    );
+
+    if (droppedOnTree) {
+      placeWish(id);
+    } else {
+      setDragged(null);
+    }
   };
 
   return (
@@ -59,15 +84,15 @@ export function WishTree({ copy, wishes, onPlace }: WishTreeProps) {
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.08 }}
               >
-                <button
+                <motion.button
                   type="button"
                   className={`wish-token glass ${selected === wish.id ? "is-selected" : ""}`}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData("text/plain", wish.id);
-                    setDragged(wish.id);
-                  }}
-                  onDragEnd={() => setDragged(null)}
+                  drag
+                  dragSnapToOrigin
+                  dragElastic={0.12}
+                  whileDrag={{ scale: 1.035, zIndex: 4 }}
+                  onDragStart={() => setDragged(wish.id)}
+                  onDragEnd={(_event, info) => finishDrag(wish.id, info)}
                   onClick={() =>
                     setSelected((current) =>
                       current === wish.id ? null : wish.id,
@@ -77,7 +102,7 @@ export function WishTree({ copy, wishes, onPlace }: WishTreeProps) {
                 >
                   <Grip size={15} aria-hidden="true" />
                   <span>{wish.text}</span>
-                </button>
+                </motion.button>
               </motion.div>
             ))}
             {availableWishes.length === 0 ? (
@@ -94,12 +119,11 @@ export function WishTree({ copy, wishes, onPlace }: WishTreeProps) {
           </div>
 
           <button
+            ref={treeRef}
             type="button"
             className={`wish-tree ${selected || dragged ? "is-ready" : ""} ${
               placed.size === wishes.length ? "is-complete" : ""
             }`}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={dropWish}
             onClick={() => placeWish(selected)}
             aria-label={
               selected

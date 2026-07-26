@@ -11,12 +11,16 @@ export type MicrophoneState =
   | "complete";
 
 type BlowDetectionOptions = {
+  active: boolean;
   candleCount: number;
   onCandleOut: (remaining: number) => void;
   onComplete: () => void;
 };
 
+const pageIsHidden = () => document.visibilityState === "hidden";
+
 export function useBlowDetection({
+  active,
   candleCount,
   onCandleOut,
   onComplete,
@@ -30,28 +34,54 @@ export function useBlowDetection({
   const blowingFramesRef = useRef(0);
   const cooldownUntilRef = useRef(0);
   const remainingRef = useRef(candleCount);
+  const requestIdRef = useRef(0);
 
   const stopListening = useCallback(() => {
+    requestIdRef.current += 1;
     cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = 0;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (contextRef.current) {
       void contextRef.current.close();
       contextRef.current = null;
     }
+    blowingFramesRef.current = 0;
+    setIntensity(0);
   }, []);
+
+  const pauseListening = useCallback(() => {
+    stopListening();
+    setStatus((current) =>
+      current === "requesting" || current === "listening" ? "idle" : current,
+    );
+  }, [stopListening]);
+
+  const dismissMicrophoneNotice = useCallback(() => {
+    stopListening();
+    setStatus("idle");
+  }, [stopListening]);
 
   const requestMicrophone = useCallback(async () => {
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia ||
-      typeof window.AudioContext === "undefined"
+      typeof window.AudioContext === "undefined" ||
+      !active ||
+      pageIsHidden()
     ) {
-      setStatus("unavailable");
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices?.getUserMedia ||
+        typeof window.AudioContext === "undefined"
+      ) {
+        setStatus("unavailable");
+      }
       return;
     }
 
     stopListening();
+    const requestId = requestIdRef.current;
     setStatus("requesting");
 
     try {
@@ -62,19 +92,30 @@ export function useBlowDetection({
           noiseSuppression: false,
         },
       });
+
+      if (requestId !== requestIdRef.current || pageIsHidden()) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      streamRef.current = stream;
       const context = new AudioContext();
+      contextRef.current = context;
       const analyser = context.createAnalyser();
       const source = context.createMediaStreamSource(stream);
-      const samples = new Uint8Array(analyser.fftSize);
 
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.72;
+      const samples = new Uint8Array(analyser.fftSize);
       source.connect(analyser);
-      streamRef.current = stream;
-      contextRef.current = context;
       setStatus("listening");
 
       const analyze = () => {
+        if (requestId !== requestIdRef.current || pageIsHidden()) {
+          pauseListening();
+          return;
+        }
+
         analyser.getByteTimeDomainData(samples);
         let sum = 0;
         for (const sample of samples) {
@@ -116,6 +157,8 @@ export function useBlowDetection({
 
       animationFrameRef.current = requestAnimationFrame(analyze);
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+
       const errorName =
         error instanceof DOMException ? error.name.toLowerCase() : "";
       setStatus(
@@ -125,15 +168,31 @@ export function useBlowDetection({
       );
       stopListening();
     }
-  }, [onCandleOut, onComplete, stopListening]);
+  }, [active, onCandleOut, onComplete, pauseListening, stopListening]);
+
+  useEffect(() => {
+    if (!active) return;
+    return pauseListening;
+  }, [active, pauseListening]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (pageIsHidden()) pauseListening();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [pauseListening]);
 
   useEffect(() => stopListening, [stopListening]);
 
   return {
+    dismissMicrophoneNotice,
     status,
     intensity,
+    pauseMicrophone: pauseListening,
     remaining,
     requestMicrophone,
   };
 }
-

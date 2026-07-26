@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { siteConfig } from "@/src/config/site";
 
-const STORAGE_KEY = "purple-aurora:audio-preference";
+const STORAGE_KEY = siteConfig.music.preferenceStorageKey;
+const DEFAULT_VOLUME = siteConfig.music.defaultVolume;
+const FADE_IN_SECONDS = siteConfig.music.fadeInMs / 1000;
+const FADE_OUT_SECONDS = siteConfig.music.fadeOutMs / 1000;
 
 type StoredAudioPreference = {
   enabled: boolean;
@@ -17,11 +21,13 @@ type AmbientGraph = {
 };
 
 function readPreference(): StoredAudioPreference {
-  if (typeof window === "undefined") return { enabled: false, volume: 0.28 };
+  if (typeof window === "undefined") {
+    return { enabled: false, volume: DEFAULT_VOLUME };
+  }
 
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) return { enabled: false, volume: 0.28 };
+    if (!saved) return { enabled: false, volume: DEFAULT_VOLUME };
     const parsed = JSON.parse(saved) as Partial<StoredAudioPreference>;
     return {
       // Browsers require a fresh gesture before audio can begin.
@@ -29,17 +35,17 @@ function readPreference(): StoredAudioPreference {
       volume:
         typeof parsed.volume === "number"
           ? Math.min(0.7, Math.max(0, parsed.volume))
-          : 0.28,
+          : DEFAULT_VOLUME,
     };
   } catch {
-    return { enabled: false, volume: 0.28 };
+    return { enabled: false, volume: DEFAULT_VOLUME };
   }
 }
 
 export function useAmbientAudio() {
   const [preference, setPreference] = useState<StoredAudioPreference>({
     enabled: false,
-    volume: 0.28,
+    volume: DEFAULT_VOLUME,
   });
   const [ready, setReady] = useState(false);
   const graphRef = useRef<AmbientGraph | null>(null);
@@ -60,7 +66,10 @@ export function useAmbientAudio() {
     const now = graph.context.currentTime;
     graph.master.gain.cancelScheduledValues(now);
     graph.master.gain.setValueAtTime(graph.master.gain.value, now);
-    graph.master.gain.linearRampToValueAtTime(0.0001, now + 0.7);
+    graph.master.gain.linearRampToValueAtTime(
+      0.0001,
+      now + FADE_OUT_SECONDS,
+    );
 
     window.setTimeout(() => {
       graph.oscillators.forEach((oscillator) => {
@@ -72,7 +81,7 @@ export function useAmbientAudio() {
         }
       });
       void graph.context.close();
-    }, 760);
+    }, siteConfig.music.fadeOutMs + 60);
     graphRef.current = null;
   }, []);
 
@@ -98,7 +107,7 @@ export function useAmbientAudio() {
       master.gain.setValueAtTime(0.0001, context.currentTime);
       master.gain.linearRampToValueAtTime(
         Math.max(0.0001, volume * 0.08),
-        context.currentTime + 1.1,
+        context.currentTime + FADE_IN_SECONDS,
       );
       warmth.type = "lowpass";
       warmth.frequency.value = 850;
@@ -159,7 +168,11 @@ export function useAmbientAudio() {
         stop();
       }
       setPreference(next);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Audio still works for this visit when storage is restricted.
+      }
       return true;
     },
     [preference, start, stop],
@@ -178,7 +191,11 @@ export function useAmbientAudio() {
         );
       }
       setPreference(next);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Volume still changes for this visit when storage is restricted.
+      }
     },
     [preference],
   );

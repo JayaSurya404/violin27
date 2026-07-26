@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Music2, Pause, Play, Volume1, VolumeX } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useAmbientAudio } from "@/src/hooks/useAmbientAudio";
 import type { InterfaceCopy } from "@/src/types/site";
 
@@ -16,6 +16,7 @@ export function MusicDock({ labels, title, visible }: MusicDockProps) {
   const { enabled, volume, ready, setEnabled, setVolume } = useAmbientAudio();
   const [expanded, setExpanded] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
+  const volumeControlsId = useId();
 
   const toggle = async () => {
     setUnavailable(false);
@@ -47,7 +48,9 @@ export function MusicDock({ labels, title, visible }: MusicDockProps) {
             className="music-dock__label"
             type="button"
             onClick={() => setExpanded((current) => !current)}
+            aria-controls={volumeControlsId}
             aria-expanded={expanded}
+            aria-label={`${expanded ? "Hide" : "Show"} volume controls for ${title}`}
           >
             <Music2 size={14} aria-hidden="true" />
             <span>{unavailable ? labels.unavailable : title}</span>
@@ -55,6 +58,7 @@ export function MusicDock({ labels, title, visible }: MusicDockProps) {
           <AnimatePresence initial={false}>
             {expanded ? (
               <motion.div
+                id={volumeControlsId}
                 className="music-dock__volume"
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: 92, opacity: 1 }}

@@ -41,7 +41,11 @@ test("preserves touch, milestone, and modal accessibility behavior", async () =>
     ]);
 
   assert.match(tree, /<motion\.button/);
-  assert.match(tree, /dragSnapToOrigin/);
+  assert.match(tree, /onPointerDown/);
+  assert.match(tree, /setPointerCapture/);
+  assert.match(tree, /createPortal/);
+  assert.match(tree, /purple-aurora:wish-drag/);
+  assert.doesNotMatch(tree, /pointer:\s*fine/);
   assert.match(experience, /\[unlocked, setUnlocked\] = useState\(false\)/);
   assert.doesNotMatch(experience, /trackExploration\("birthday-reveal"\)/);
   assert.match(experience, /cakeComplete/);

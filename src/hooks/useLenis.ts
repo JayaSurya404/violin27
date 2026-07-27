@@ -3,6 +3,8 @@
 import Lenis from "lenis";
 import { useEffect } from "react";
 
+const WISH_DRAG_EVENT = "purple-aurora:wish-drag";
+
 export function useLenis(disabled: boolean) {
   useEffect(() => {
     if (disabled) return;
@@ -22,9 +24,21 @@ export function useLenis(disabled: boolean) {
       frameId = requestAnimationFrame(frame);
     };
 
+    const handleWishDrag = (event: Event) => {
+      const active = (event as CustomEvent<{ active?: boolean }>).detail
+        ?.active;
+      if (active) {
+        lenis.stop();
+      } else {
+        lenis.start();
+      }
+    };
+
+    window.addEventListener(WISH_DRAG_EVENT, handleWishDrag);
     frameId = requestAnimationFrame(frame);
 
     return () => {
+      window.removeEventListener(WISH_DRAG_EVENT, handleWishDrag);
       cancelAnimationFrame(frameId);
       lenis.destroy();
     };

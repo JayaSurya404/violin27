@@ -16,12 +16,19 @@ export function MusicDock({ labels, title, visible }: MusicDockProps) {
   const { enabled, volume, ready, setEnabled, setVolume } = useAmbientAudio();
   const [expanded, setExpanded] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
+  const [changing, setChanging] = useState(false);
   const volumeControlsId = useId();
 
   const toggle = async () => {
+    if (changing) return;
+    setChanging(true);
     setUnavailable(false);
-    const changed = await setEnabled(!enabled);
-    if (!changed) setUnavailable(true);
+    try {
+      const changed = await setEnabled(!enabled);
+      if (!changed) setUnavailable(true);
+    } finally {
+      setChanging(false);
+    }
   };
 
   return (
@@ -39,7 +46,8 @@ export function MusicDock({ labels, title, visible }: MusicDockProps) {
             className="icon-button"
             type="button"
             onClick={toggle}
-            disabled={!ready}
+            disabled={!ready || changing}
+            aria-busy={changing}
             aria-label={enabled ? labels.pauseLabel : labels.playLabel}
           >
             {enabled ? <Pause size={17} /> : <Play size={17} />}

@@ -12,34 +12,49 @@ const CANDLE_COUNT = 5;
 
 type CakeCeremonyProps = {
   content: CakeContent;
+  onExtinguish: () => void;
   onComplete: () => void;
 };
 
 export function CakeCeremony({
   content,
+  onExtinguish,
   onComplete,
 }: CakeCeremonyProps) {
   const reduceMotion = useReducedMotion();
-  const didCompleteRef = useRef(false);
+  const didExtinguishRef = useRef(false);
+  const celebrationTimerRef = useRef(0);
   const sectionRef = useRef<HTMLElement>(null);
+  const retryButtonRef = useRef<HTMLButtonElement>(null);
   const [isInViewport, setIsInViewport] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
 
-  const handleCandleOut = useCallback(() => {
-    navigator.vibrate?.(10);
+  const handleCandleOut = useCallback((remainingCandles: number) => {
+    if (remainingCandles === 0) navigator.vibrate?.(18);
   }, []);
 
-  const handleComplete = useCallback(() => {
-    if (didCompleteRef.current) return;
-    didCompleteRef.current = true;
-    playCelebration();
-    navigator.vibrate?.([24, 45, 32]);
-    onComplete();
-  }, [onComplete]);
+  const handleExtinguish = useCallback(() => {
+    if (didExtinguishRef.current) return;
+    didExtinguishRef.current = true;
+    onExtinguish();
+    navigator.vibrate?.([18, 34, 22]);
+
+    celebrationTimerRef.current = window.setTimeout(
+      () => {
+        setCelebrating(true);
+        playCelebration();
+        navigator.vibrate?.([24, 45, 32]);
+        onComplete();
+      },
+      reduceMotion ? 320 : 1750,
+    );
+  }, [onComplete, onExtinguish, reduceMotion]);
 
   const {
     dismissMicrophoneNotice,
     status,
     intensity,
+    gusting,
     pauseMicrophone,
     remaining,
     requestMicrophone,
@@ -47,29 +62,71 @@ export function CakeCeremony({
     active: isInViewport,
     candleCount: CANDLE_COUNT,
     onCandleOut: handleCandleOut,
-    onComplete: handleComplete,
+    onComplete: handleExtinguish,
   });
 
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
 
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) pauseMicrophone();
-      setIsInViewport(entry.isIntersecting);
-    });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const meaningfullyVisible =
+          entry.isIntersecting && entry.intersectionRatio >= 0.18;
+        if (!meaningfullyVisible) pauseMicrophone();
+        setIsInViewport(meaningfullyVisible);
+      },
+      {
+        rootMargin: "-10% 0px -10%",
+        threshold: [0, 0.18],
+      },
+    );
 
     observer.observe(section);
     return () => observer.disconnect();
   }, [pauseMicrophone]);
 
-  const complete = status === "complete";
+  useEffect(
+    () => () => window.clearTimeout(celebrationTimerRef.current),
+    [],
+  );
+
+  const extinguished = status === "complete";
   const needsExplanation = status === "denied" || status === "unavailable";
+
+  useEffect(() => {
+    if (!needsExplanation) return;
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const focusFrame = window.requestAnimationFrame(() =>
+      retryButtonRef.current?.focus({ preventScroll: true }),
+    );
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismissMicrophoneNotice();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus({ preventScroll: true });
+    };
+  }, [dismissMicrophoneNotice, needsExplanation]);
 
   return (
     <section
       ref={sectionRef}
-      className={`chapter cake-chapter ${complete ? "is-complete" : ""}`}
+      className={`chapter cake-chapter ${
+        gusting ? "is-gusting" : ""
+      } ${extinguished ? "is-afterglow" : ""} ${
+        celebrating ? "is-complete" : ""
+      }`}
     >
       <div className="chapter-shell chapter-shell--narrow">
         <SectionHeading
@@ -92,21 +149,36 @@ export function CakeCeremony({
               <i key={index} style={{ "--firework-index": index } as React.CSSProperties} />
             ))}
           </div>
+          <div className="cake-petals" aria-hidden="true">
+            {Array.from({ length: 10 }, (_, index) => (
+              <i
+                key={index}
+                style={{ "--cake-petal-index": index } as React.CSSProperties}
+              />
+            ))}
+          </div>
 
           <div
             className="birthday-cake"
-            aria-label={`${remaining} of ${CANDLE_COUNT} candles are still lit`}
+            role="img"
+            aria-label={
+              remaining === 0
+                ? `All ${CANDLE_COUNT} candles are out`
+                : `All ${CANDLE_COUNT} candles are lit`
+            }
           >
             <div className="candles" aria-hidden="true">
               {Array.from({ length: CANDLE_COUNT }, (_, index) => {
-                const lit = index < remaining;
+                const lit = remaining > 0;
                 return (
                   <span
                     className={`candle ${lit ? "is-lit" : "is-out"}`}
                     key={index}
+                    style={{ "--candle-index": index } as React.CSSProperties}
                   >
                     <i className="flame" />
                     <i className="smoke" />
+                    <i className="ember" />
                   </span>
                 );
               })}
@@ -152,7 +224,13 @@ export function CakeCeremony({
               </div>
             ) : null}
 
-            {complete ? (
+            {extinguished && !celebrating ? (
+              <span className="sr-only" role="status">
+                {content.successTitle}
+              </span>
+            ) : null}
+
+            {celebrating ? (
               <motion.div
                 className="cake-success glass"
                 initial={{ opacity: 0, y: 15, scale: 0.96 }}
@@ -176,6 +254,7 @@ export function CakeCeremony({
             exit={{ opacity: 0, y: 12 }}
             role="dialog"
             aria-labelledby="microphone-explanation-title"
+            aria-describedby="microphone-explanation-description"
           >
             <Mic size={20} aria-hidden="true" />
             <div>
@@ -184,7 +263,7 @@ export function CakeCeremony({
                   ? content.deniedTitle
                   : content.unavailableTitle}
               </h3>
-              <p>
+              <p id="microphone-explanation-description">
                 {status === "denied"
                   ? content.deniedText
                   : content.unavailableText}
@@ -199,6 +278,7 @@ export function CakeCeremony({
               }}
             >
               <button
+                ref={retryButtonRef}
                 type="button"
                 className="secondary-button"
                 onClick={() => void requestMicrophone()}

@@ -8,10 +8,12 @@ export function useLenis(disabled: boolean) {
     if (disabled) return;
 
     const lenis = new Lenis({
-      duration: 1.15,
+      duration: 1.08,
+      easing: (value) => Math.min(1, 1.001 - 2 ** (-10 * value)),
       smoothWheel: true,
-      touchMultiplier: 1,
-      wheelMultiplier: 0.82,
+      syncTouch: false,
+      touchMultiplier: 1.04,
+      wheelMultiplier: 0.78,
     });
     let frameId = 0;
 
@@ -28,4 +30,3 @@ export function useLenis(disabled: boolean) {
     };
   }, [disabled]);
 }
-

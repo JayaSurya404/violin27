@@ -28,11 +28,16 @@ export function useBlowDetection({
   const [status, setStatus] = useState<MicrophoneState>("idle");
   const [intensity, setIntensity] = useState(0);
   const [remaining, setRemaining] = useState(candleCount);
+  const [gusting, setGusting] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef(0);
-  const blowingFramesRef = useRef(0);
-  const cooldownUntilRef = useRef(0);
+  const extinguishTimerRef = useRef(0);
+  const strongBlowFramesRef = useRef(0);
+  const smoothedIntensityRef = useRef(0);
+  const reportedIntensityRef = useRef(0);
+  const lastIntensityReportRef = useRef(0);
+  const noiseFloorRef = useRef(0.018);
   const remainingRef = useRef(candleCount);
   const requestIdRef = useRef(0);
 
@@ -40,13 +45,20 @@ export function useBlowDetection({
     requestIdRef.current += 1;
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
+    window.clearTimeout(extinguishTimerRef.current);
+    extinguishTimerRef.current = 0;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (contextRef.current) {
       void contextRef.current.close();
       contextRef.current = null;
     }
-    blowingFramesRef.current = 0;
+    strongBlowFramesRef.current = 0;
+    smoothedIntensityRef.current = 0;
+    reportedIntensityRef.current = 0;
+    lastIntensityReportRef.current = 0;
+    noiseFloorRef.current = 0.018;
+    setGusting(false);
     setIntensity(0);
   }, []);
 
@@ -63,17 +75,26 @@ export function useBlowDetection({
   }, [stopListening]);
 
   const requestMicrophone = useCallback(async () => {
+    const AudioContextClass =
+      typeof window === "undefined"
+        ? undefined
+        : window.AudioContext ??
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia ||
-      typeof window.AudioContext === "undefined" ||
+      !AudioContextClass ||
       !active ||
       pageIsHidden()
     ) {
       if (
         typeof navigator === "undefined" ||
         !navigator.mediaDevices?.getUserMedia ||
-        typeof window.AudioContext === "undefined"
+        !AudioContextClass
       ) {
         setStatus("unavailable");
       }
@@ -99,16 +120,25 @@ export function useBlowDetection({
       }
 
       streamRef.current = stream;
-      const context = new AudioContext();
+      stream.getTracks().forEach((track) => {
+        track.addEventListener("ended", pauseListening, { once: true });
+      });
+      const context = new AudioContextClass();
       contextRef.current = context;
+      await context.resume();
+      if (requestId !== requestIdRef.current || pageIsHidden()) {
+        stopListening();
+        return;
+      }
       const analyser = context.createAnalyser();
       const source = context.createMediaStreamSource(stream);
 
       analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.72;
+      analyser.smoothingTimeConstant = 0.68;
       const samples = new Uint8Array(analyser.fftSize);
       source.connect(analyser);
       setStatus("listening");
+      const calibrationUntil = performance.now() + 420;
 
       const analyze = () => {
         if (requestId !== requestIdRef.current || pageIsHidden()) {
@@ -118,38 +148,81 @@ export function useBlowDetection({
 
         analyser.getByteTimeDomainData(samples);
         let sum = 0;
-        for (const sample of samples) {
+        let roughness = 0;
+        for (let index = 0; index < samples.length; index += 1) {
+          const sample = samples[index];
           const normalized = (sample - 128) / 128;
           sum += normalized * normalized;
+          if (index > 0) {
+            roughness += Math.abs(sample - samples[index - 1]) / 128;
+          }
         }
         const rms = Math.sqrt(sum / samples.length);
-        const visualIntensity = Math.min(1, Math.max(0, (rms - 0.025) * 7.5));
-        setIntensity(visualIntensity);
+        const averageRoughness = roughness / Math.max(1, samples.length - 1);
+        const now = performance.now();
 
-        if (rms > 0.095) {
-          blowingFramesRef.current += 1;
-        } else {
-          blowingFramesRef.current = Math.max(0, blowingFramesRef.current - 2);
+        if (
+          now < calibrationUntil ||
+          (rms < noiseFloorRef.current * 1.7 && averageRoughness < 0.025)
+        ) {
+          noiseFloorRef.current =
+            noiseFloorRef.current * 0.985 + Math.min(rms, 0.045) * 0.015;
         }
 
-        const now = performance.now();
+        const signal = Math.max(0, rms - noiseFloorRef.current - 0.006);
+        const visualTarget = Math.min(1, signal * 11.5);
+        const smoothing =
+          visualTarget > smoothedIntensityRef.current ? 0.34 : 0.13;
+        smoothedIntensityRef.current +=
+          (visualTarget - smoothedIntensityRef.current) * smoothing;
+
         if (
-          blowingFramesRef.current > 9 &&
-          now > cooldownUntilRef.current &&
+          Math.abs(
+            smoothedIntensityRef.current - reportedIntensityRef.current,
+          ) > 0.025 ||
+          now - lastIntensityReportRef.current > 110
+        ) {
+          reportedIntensityRef.current = smoothedIntensityRef.current;
+          lastIntensityReportRef.current = now;
+          setIntensity(smoothedIntensityRef.current);
+        }
+
+        const isBreathLike =
+          averageRoughness > 0.018 &&
+          rms > Math.max(0.075, noiseFloorRef.current * 3.15);
+        if (
+          now > calibrationUntil &&
+          isBreathLike &&
+          smoothedIntensityRef.current > 0.56
+        ) {
+          strongBlowFramesRef.current += 1;
+        } else {
+          strongBlowFramesRef.current = Math.max(
+            0,
+            strongBlowFramesRef.current - 2,
+          );
+        }
+
+        if (
+          strongBlowFramesRef.current >= 7 &&
           remainingRef.current > 0
         ) {
-          blowingFramesRef.current = 0;
-          cooldownUntilRef.current = now + 420;
-          remainingRef.current -= 1;
-          setRemaining(remainingRef.current);
-          onCandleOut(remainingRef.current);
+          strongBlowFramesRef.current = 0;
+          setGusting(true);
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = 0;
+          extinguishTimerRef.current = window.setTimeout(() => {
+            if (requestId !== requestIdRef.current) return;
 
-          if (remainingRef.current === 0) {
+            extinguishTimerRef.current = 0;
+            remainingRef.current = 0;
+            setRemaining(0);
+            onCandleOut(0);
             setStatus("complete");
             stopListening();
             onComplete();
-            return;
-          }
+          }, 190);
+          return;
         }
 
         animationFrameRef.current = requestAnimationFrame(analyze);
@@ -191,6 +264,7 @@ export function useBlowDetection({
     dismissMicrophoneNotice,
     status,
     intensity,
+    gusting,
     pauseMicrophone: pauseListening,
     remaining,
     requestMicrophone,

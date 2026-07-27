@@ -1,7 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  MotionConfig,
+  useReducedMotion,
+} from "framer-motion";
 import { MoonStar, WifiOff } from "lucide-react";
 import {
   type CSSProperties,
@@ -62,9 +67,11 @@ type ThemeStyle = CSSProperties & {
 export function BirthdayExperience() {
   const reduceMotion = useReducedMotion();
   const mainRef = useRef<HTMLElement>(null);
+  const storyChapterRef = useRef<HTMLElement | null>(null);
   const moonNoteTimerRef = useRef(0);
   const [unlocked, setUnlocked] = useState(false);
   const [birthdayRevealed, setBirthdayRevealed] = useState(false);
+  const [cakeExtinguished, setCakeExtinguished] = useState(false);
   const [cakeComplete, setCakeComplete] = useState(false);
   const [journeyProgress, setJourneyProgress] = useState(0);
   const [storyProgress, setStoryProgress] = useState(0);
@@ -170,14 +177,19 @@ export function BirthdayExperience() {
       frameId = 0;
       const documentHeight =
         document.documentElement.scrollHeight - window.innerHeight;
-      setJourneyProgress(
+      const nextJourneyProgress =
         documentHeight > 0
           ? Math.min(1, Math.max(0, window.scrollY / documentHeight))
-          : 0,
+          : 0;
+      setJourneyProgress((current) =>
+        Math.abs(current - nextJourneyProgress) < 0.0015
+          ? current
+          : nextJourneyProgress,
       );
 
-      const storyChapter =
+      storyChapterRef.current ??=
         document.querySelector<HTMLElement>(".story-chapter");
+      const storyChapter = storyChapterRef.current;
       if (storyChapter) {
         const storyBounds = storyChapter.getBoundingClientRect();
         const storyTravel = window.innerHeight + storyBounds.height;
@@ -209,6 +221,7 @@ export function BirthdayExperience() {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
       window.cancelAnimationFrame(frameId);
+      storyChapterRef.current = null;
     };
   }, [unlocked]);
 
@@ -236,12 +249,16 @@ export function BirthdayExperience() {
 
   const moonReady =
     genuineInteractionCount >= siteConfig.experience.moonUnlockInteractions;
-  const treeWishCount = Array.from(explorations).filter((id) =>
-    id.startsWith("tree-wish:"),
-  ).length;
+  const treeWishCount = useMemo(
+    () =>
+      Array.from(explorations).filter((id) => id.startsWith("tree-wish:"))
+        .length,
+    [explorations],
+  );
   const worldState = useMemo<AuroraNarrativeState>(
     () => ({
       birthdayRevealed,
+      cakeExtinguished,
       cakeComplete,
       letterOpened: explorations.has("letter-opened"),
       moonTouched: explorations.has("moon-touched"),
@@ -253,22 +270,28 @@ export function BirthdayExperience() {
     }),
     [
       birthdayRevealed,
+      cakeExtinguished,
       cakeComplete,
       explorations,
       storyProgress,
       treeWishCount,
     ],
   );
-  const storyBeats = siteConfig.story.paragraphs.map((text, index) => ({
-    id: `story-${index + 1}`,
-    text,
-  }));
+  const storyBeats = useMemo(
+    () =>
+      siteConfig.story.paragraphs.map((text, index) => ({
+        id: `story-${index + 1}`,
+        text,
+      })),
+    [],
+  );
 
   return (
-    <div
-      className={`experience ${unlocked ? "is-unlocked" : ""}`}
-      style={themeStyle}
-    >
+    <MotionConfig reducedMotion="user">
+      <div
+        className={`experience ${unlocked ? "is-unlocked" : ""}`}
+        style={themeStyle}
+      >
       {unlocked ? (
         <a className="skip-link" href="#experience-main">
           Skip to the birthday story
@@ -284,6 +307,19 @@ export function BirthdayExperience() {
           progress={journeyProgress}
           unlocked
         />
+      ) : null}
+      {unlocked ? (
+        <div className="distant-sky-details" aria-hidden="true">
+          <i className="shooting-star shooting-star--one" />
+          <i className="shooting-star shooting-star--two" />
+          {Array.from({ length: 5 }, (_, index) => (
+            <i
+              className="world-firefly"
+              key={index}
+              style={{ "--world-firefly-index": index } as CSSProperties}
+            />
+          ))}
+        </div>
       ) : null}
       <div className="experience__veil" aria-hidden="true" />
 
@@ -329,6 +365,7 @@ export function BirthdayExperience() {
         />
         <CakeCeremony
           content={siteConfig.cake}
+          onExtinguish={() => setCakeExtinguished(true)}
           onComplete={() => {
             setCakeComplete(true);
             trackExploration("cake-complete");
@@ -384,12 +421,13 @@ export function BirthdayExperience() {
         ) : null}
       </AnimatePresence>
 
-      <MoonBlessing
-        open={moonBlessingOpen}
-        title={siteConfig.moon.blessingTitle}
-        message={siteConfig.moon.blessing}
-        onClose={() => setMoonBlessingOpen(false)}
-      />
-    </div>
+        <MoonBlessing
+          open={moonBlessingOpen}
+          title={siteConfig.moon.blessingTitle}
+          message={siteConfig.moon.blessing}
+          onClose={() => setMoonBlessingOpen(false)}
+        />
+      </div>
+    </MotionConfig>
   );
 }

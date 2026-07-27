@@ -9,6 +9,7 @@ type ToneOptions = {
 };
 
 let sharedContext: AudioContext | null = null;
+let sharedOutput: GainNode | null = null;
 
 function getAudioContext() {
   if (typeof window === "undefined") return null;
@@ -23,6 +24,23 @@ function getAudioContext() {
   if (!AudioContextClass) return null;
   sharedContext ??= new AudioContextClass();
   return sharedContext;
+}
+
+function getAudioOutput(context: AudioContext) {
+  if (sharedOutput) return sharedOutput;
+
+  const output = context.createGain();
+  const limiter = context.createDynamicsCompressor();
+  output.gain.value = 0.86;
+  limiter.threshold.value = -20;
+  limiter.knee.value = 16;
+  limiter.ratio.value = 4;
+  limiter.attack.value = 0.004;
+  limiter.release.value = 0.22;
+  output.connect(limiter);
+  limiter.connect(context.destination);
+  sharedOutput = output;
+  return output;
 }
 
 export async function ensureAudioContext() {
@@ -57,7 +75,15 @@ export async function playTone({
   );
 
   oscillator.connect(volume);
-  volume.connect(context.destination);
+  volume.connect(getAudioOutput(context));
+  oscillator.addEventListener(
+    "ended",
+    () => {
+      oscillator.disconnect();
+      volume.disconnect();
+    },
+    { once: true },
+  );
   oscillator.start(startTime);
   oscillator.stop(startTime + duration + 0.08);
 }

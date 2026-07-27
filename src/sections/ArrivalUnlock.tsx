@@ -37,7 +37,9 @@ export function ArrivalUnlock({
   const startedAtRef = useRef(0);
   const frameRef = useRef(0);
   const didCompleteRef = useRef(false);
+  const didHalfPulseRef = useRef(false);
   const hintTimerRef = useRef(0);
+  const unlockTimerRef = useRef(0);
   const lightRef = useRef<HTMLDivElement>(null);
   const quietRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
@@ -71,7 +73,10 @@ export function ArrivalUnlock({
           0,
         );
     }
-    window.setTimeout(onUnlock, reduceMotion ? 250 : 1250);
+    unlockTimerRef.current = window.setTimeout(
+      onUnlock,
+      reduceMotion ? 250 : 1380,
+    );
   }, [onUnlock, reduceMotion]);
 
   const beginHold = useCallback(() => {
@@ -79,12 +84,17 @@ export function ArrivalUnlock({
     window.clearTimeout(hintTimerRef.current);
     setShowHint(false);
     setHolding(true);
+    didHalfPulseRef.current = false;
     playPulse();
     startedAtRef.current = performance.now();
     const animateHold = (time: number) => {
       const elapsed = time - startedAtRef.current;
       const nextProgress = Math.min(1, elapsed / holdDurationMs);
       setProgress(nextProgress);
+      if (nextProgress >= 0.52 && !didHalfPulseRef.current) {
+        didHalfPulseRef.current = true;
+        navigator.vibrate?.(9);
+      }
 
       if (nextProgress >= 1) {
         complete();
@@ -100,6 +110,7 @@ export function ArrivalUnlock({
     cancelAnimationFrame(frameRef.current);
     setHolding(false);
     setProgress(0);
+    didHalfPulseRef.current = false;
     setShowHint(true);
     navigator.vibrate?.(18);
     hintTimerRef.current = window.setTimeout(() => setShowHint(false), 1600);
@@ -132,9 +143,30 @@ export function ArrivalUnlock({
   };
 
   useEffect(
+    () => {
+      const cancelOnInterruption = () => cancelHold();
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "hidden") cancelHold();
+      };
+
+      window.addEventListener("blur", cancelOnInterruption);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      return () => {
+        window.removeEventListener("blur", cancelOnInterruption);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+      };
+    },
+    [cancelHold],
+  );
+
+  useEffect(
     () => () => {
       cancelAnimationFrame(frameRef.current);
       window.clearTimeout(hintTimerRef.current);
+      window.clearTimeout(unlockTimerRef.current);
       timelineRef.current?.kill();
     },
     [],
@@ -145,7 +177,7 @@ export function ArrivalUnlock({
       className={`arrival ${unlocked ? "is-unlocking" : ""}`}
       initial={{ opacity: 1 }}
       animate={unlocked ? { opacity: 0 } : { opacity: 1 }}
-      transition={{ duration: reduceMotion ? 0.2 : 1.25, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: reduceMotion ? 0.2 : 1.35, ease: [0.22, 1, 0.36, 1] }}
       aria-hidden={unlocked}
       style={
         {
@@ -194,7 +226,12 @@ export function ArrivalUnlock({
           onContextMenu={(event) => event.preventDefault()}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
-          style={{ "--hold-progress": `${progress * 360}deg` } as React.CSSProperties}
+          style={
+            {
+              "--hold-progress": `${progress * 360}deg`,
+              "--hold-progress-ratio": progress,
+            } as React.CSSProperties
+          }
         >
           <span className="fingerprint__ring" aria-hidden="true" />
           <span className="fingerprint__core" aria-hidden="true">

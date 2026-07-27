@@ -63,19 +63,30 @@ export function TypewriterSequence({
   const displayText = reduceMotion ? lines[lineIndex] : visibleText;
 
   return (
-    <div className="typewriter" aria-live="polite">
+    <div className="typewriter">
       <AnimatePresence mode="wait">
         <motion.p
           key={lineIndex}
+          aria-hidden="true"
           initial={reduceMotion ? false : { opacity: 0, filter: "blur(6px)" }}
           animate={{ opacity: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: -8, filter: "blur(5px)" }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          exit={
+            reduceMotion
+              ? { opacity: 0 }
+              : { opacity: 0, y: -8, filter: "blur(5px)" }
+          }
+          transition={{
+            duration: reduceMotion ? 0.12 : 0.55,
+            ease: [0.22, 1, 0.36, 1],
+          }}
         >
           {displayText}
           <span className="typewriter__cursor" aria-hidden="true" />
         </motion.p>
       </AnimatePresence>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {lines[lineIndex]}
+      </span>
     </div>
   );
 }

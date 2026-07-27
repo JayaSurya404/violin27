@@ -42,10 +42,6 @@
     transform 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.moonButton:hover {
-  background: radial-gradient(circle, rgb(225 214 255 / 8%) 34%, transparent 70%);
-}
-
 .moonButton:disabled {
   pointer-events: none;
 }
@@ -265,6 +261,17 @@
   .fallbackMoon {
     top: 11%;
     right: clamp(4rem, 9.5vw, 10.5rem);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .moonButton:hover {
+    background: radial-gradient(
+      circle,
+      rgb(225 214 255 / 8%) 34%,
+      transparent 70%
+    );
+    transform: scale(1.018);
   }
 }
 

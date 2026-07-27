@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Sparkle, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SectionHeading } from "@/src/components/SectionHeading";
 import type { WishSkyCopy, WishStar } from "@/src/types/site";
 import { playChime } from "@/src/lib/audio";
@@ -17,6 +17,7 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
   const reduceMotion = useReducedMotion();
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<WishStar | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   const points = useMemo(
     () =>
@@ -36,6 +37,31 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
     }
   };
 
+  useEffect(() => {
+    if (!selected) return;
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const focusFrame = window.requestAnimationFrame(() =>
+      closeButtonRef.current?.focus({ preventScroll: true }),
+    );
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSelected(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus({ preventScroll: true });
+    };
+  }, [selected]);
+
   return (
     <section className="chapter wish-sky" aria-labelledby="wish-sky-title">
       <div className="chapter-shell">
@@ -48,7 +74,20 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
           {copy.title}
         </span>
 
-        <div className="wish-sky__stage">
+        <motion.div
+          className="wish-sky__stage"
+          initial={
+            reduceMotion
+              ? false
+              : { opacity: 0, y: 24, scale: 0.99, filter: "blur(7px)" }
+          }
+          whileInView={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{
+            duration: reduceMotion ? 0.12 : 1.05,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+        >
           <svg
             className="constellation"
             viewBox="0 0 100 100"
@@ -66,7 +105,7 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
                   y2={point.y}
                   initial={{ pathLength: 0, opacity: 0 }}
                   animate={{ pathLength: 1, opacity: 0.72 }}
-                  transition={{ duration: 1.1 }}
+                  transition={{ duration: reduceMotion ? 0.01 : 1.1 }}
                 />
               );
             })}
@@ -88,9 +127,15 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
                   initial={reduceMotion ? false : { opacity: 0, scale: 0 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  transition={{ delay: index * 0.11, type: "spring" }}
-                  whileHover={{ scale: 1.14 }}
-                  whileTap={{ scale: 0.9 }}
+                  transition={{
+                    delay: reduceMotion ? 0 : index * 0.08,
+                    type: "spring",
+                    stiffness: 280,
+                    damping: 22,
+                    mass: 0.55,
+                  }}
+                  whileHover={reduceMotion ? undefined : { scale: 1.08 }}
+                  whileTap={{ scale: 0.94 }}
                 >
                   <span className="wish-star__halo" aria-hidden="true" />
                   <Sparkle
@@ -112,21 +157,35 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
                     : `${opened.size} / ${wishes.length} · ${copy.openedLabel}`}
                 </span>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       <AnimatePresence>
         {selected ? (
           <motion.div
             className="wish-note glass"
-            initial={{ opacity: 0, y: 18, scale: 0.94, filter: "blur(8px)" }}
+            initial={
+              reduceMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: 18, scale: 0.94, filter: "blur(8px)" }
+            }
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: 12, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 170, damping: 21 }}
+            exit={
+              reduceMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: 12, scale: 0.96 }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0.15 }
+                : { type: "spring", stiffness: 190, damping: 23, mass: 0.75 }
+            }
             role="dialog"
             aria-label={`Wish: ${selected.title}`}
+            aria-describedby={`wish-note-${selected.id}`}
           >
             <button
+              ref={closeButtonRef}
               className="modal-close"
               type="button"
               onClick={() => setSelected(null)}
@@ -136,7 +195,7 @@ export function WishSky({ copy, wishes, onDiscover }: WishSkyProps) {
             </button>
             <Sparkle className="wish-note__sparkle" size={18} aria-hidden="true" />
             <span>{selected.title}</span>
-            <p>{selected.message}</p>
+            <p id={`wish-note-${selected.id}`}>{selected.message}</p>
           </motion.div>
         ) : null}
       </AnimatePresence>

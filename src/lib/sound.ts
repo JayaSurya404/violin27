@@ -1,0 +1,3 @@
+export function chime(frequency = 210, duration = 0.45) {
+  try { const ctx = new AudioContext(); const oscillator = ctx.createOscillator(); const gain = ctx.createGain(); oscillator.type = "sine"; oscillator.frequency.setValueAtTime(frequency, ctx.currentTime); gain.gain.setValueAtTime(0.0001, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.045, ctx.currentTime + 0.04); gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration); oscillator.connect(gain).connect(ctx.destination); oscillator.start(); oscillator.stop(ctx.currentTime + duration); oscillator.addEventListener("ended", () => void ctx.close()); } catch { /* audio is optional */ }
+}

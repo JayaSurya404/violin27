@@ -11,7 +11,7 @@ export const site: SiteConfig = {
     "But because honesty matters.",
     "Stay for a little while."
   ],
-  openingTitle: "A small letter.",
+  openingTitle: "I’ve carried this quietly for a long time.",
   intro: "This is simply a place for something I wanted to say, slowly.",
   letterPrompt: "Open when you’re ready.",
   loveMessage: { lead: "So after all these years…", simple: "I should probably say it simply.", reveal: "I love you." },

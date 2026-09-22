@@ -11,7 +11,8 @@ export const site: SiteConfig = {
     "But because honesty matters.",
     "Stay for a little while."
   ],
-  intro: "This is simply a place for an honest thing to be said, slowly.",
+  openingTitle: "A small letter.",
+  intro: "This is simply a place for something I wanted to say, slowly.",
   letterPrompt: "Open when you’re ready.",
   loveMessage: { lead: "So after all these years…", simple: "I should probably say it simply.", reveal: "I love you." },
   noPressure: ["I don’t need an answer tonight.", "I don’t want this little page to become a question you have to solve. I only wanted you to know what has been true in my heart for a long time."],
@@ -28,8 +29,8 @@ export const site: SiteConfig = {
     "Years moved on, but the feeling stayed in the gentle places: in music, in quiet hours, and in the memory of your singing. I have always admired the light you bring to what you do.",
     "I know I have told you how I feel before. I also understand that your heart may hold a different answer. This is not here to change your mind. I only wanted to tell my truth with more care than I once knew how to.",
     "I love you. And whatever this means for us, I hope your life is filled with beautiful things.",
-    "— Jaya"
+    "— Jaya Surya"
   ],
   wishes: ["May you keep singing.", "May you keep growing.", "May your dreams become real.", "May life be gentle with you.", "May you laugh often.", "May there always be music around you."],
-  final: { first: "Whatever tomorrow looks like, I’ll always be glad that I got to know you.", second: "Thank you for being someone worth feeling this deeply about.", signature: "Made with honesty," }
+  final: { first: "Whatever tomorrow looks like, I’ll always be glad that I got to know you.", second: "Thank you for being someone worth feeling this deeply about." }
 };

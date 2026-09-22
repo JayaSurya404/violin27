@@ -12,7 +12,7 @@ export const site: SiteConfig = {
     "Stay for a little while."
   ],
   intro: "This is simply a place for an honest thing to be said, slowly.",
-  quotes: { music: "Sometimes a song ends…", musicEmphasis: "but the person it reminds you of doesn’t.", letterPrompt: "Open when you’re ready." },
+  letterPrompt: "Open when you’re ready.",
   loveMessage: { lead: "So after all these years…", simple: "I should probably say it simply.", reveal: "I love you." },
   noPressure: ["I don’t need an answer tonight.", "I don’t want this little page to become a question you have to solve. I only wanted you to know what has been true in my heart for a long time."],
   chapters: [
@@ -30,7 +30,6 @@ export const site: SiteConfig = {
     "I love you. And whatever this means for us, I hope your life is filled with beautiful things.",
     "— Jaya"
   ],
-  music: { title: "A quiet constellation", artist: "An optional moment of sound" },
   wishes: ["May you keep singing.", "May you keep growing.", "May your dreams become real.", "May life be gentle with you.", "May you laugh often.", "May there always be music around you."],
   final: { first: "Whatever tomorrow looks like, I’ll always be glad that I got to know you.", second: "Thank you for being someone worth feeling this deeply about.", signature: "Made with honesty," }
 };
